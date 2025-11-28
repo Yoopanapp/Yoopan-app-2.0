@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 // Fonction helper adaptée pour la nouvelle base de données
 async function getProductsForMatching() {
   
-  // 1. On récupère les produits AVEC leurs prix (relation prices)
+  // 1. On récupère les produits AVEC leurs prix ET le nom du magasin lié
   const products = await prisma.product.findMany({
     select: { 
       ean: true, 
@@ -25,28 +25,38 @@ async function getProductsForMatching() {
       categorie: true,
       // On va chercher les infos dans la table Price liée
       prices: {
-        select: { magasin: true, valeur: true }, 
+        select: { 
+            valeur: true,
+            // CORRECTION ICI : On récupère le nom via la relation store
+            store: {
+                select: { nom: true }
+            }
+        }, 
         orderBy: { valeur: 'asc' } // Le moins cher en premier
       }
     }
   });
   
   // 2. Transformation pour l'affichage
-  // On convertit le format Prisma (Product -> prices[]) en format UI (Product avec prix + offers[])
   const formattedProducts = products.map((p: any) => {
       const prices = p.prices || [];
-      const bestOffer = prices.length > 0 ? prices[0] : { magasin: "Indisponible", valeur: 0 };
+      
+      // On prépare une liste d'offres propre pour éviter les erreurs
+      const cleanOffers = prices.map((o: any) => ({
+          // CORRECTION ICI : o.store.nom au lieu de o.magasin
+          magasin: o.store ? o.store.nom : "Magasin Inconnu",
+          prix: o.valeur
+      }));
+
+      const bestOffer = cleanOffers.length > 0 ? cleanOffers[0] : { magasin: "Indisponible", prix: 0 };
 
       return {
           ...p,
           // On recrée les champs que ton UI attend
-          prix: bestOffer.valeur,
+          prix: bestOffer.prix,
           magasin: bestOffer.magasin,
-          // On crée la liste des offres
-          offers: prices.map((o: any) => ({ 
-              magasin: o.magasin, 
-              prix: o.valeur 
-          }))
+          // On passe la liste des offres nettoyée
+          offers: cleanOffers
       };
   });
   

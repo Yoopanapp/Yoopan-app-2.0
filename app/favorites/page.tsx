@@ -17,18 +17,19 @@ type GroupedProduct = { ean: string; nom: string; image: string | null; categori
 
 export default async function FavoritesPage() {
   
-  // 1. On récupère les produits AVEC leurs prix triés
+  // 1. On récupère les produits AVEC leurs prix triés ET les infos magasin
   const rawProducts = await prisma.product.findMany({
     include: {
       prices: {
+        include: {
+          store: true // <--- C'EST L'AJOUT CRITIQUE ICI
+        },
         orderBy: { valeur: 'asc' }
       }
     }
   });
 
   // 2. Transformation des données (Mapping)
-  // Prisma nous renvoie un format imbriqué (produit -> prices), 
-  // mais tes composants UI attendent un format "GroupedProduct" spécifique.
   const groupedProducts: GroupedProduct[] = rawProducts.map((p) => {
     // On extrait les infos de prix depuis la relation 'prices'
     const prices = p.prices || [];
@@ -42,7 +43,8 @@ export default async function FavoritesPage() {
     // On transforme les prix Prisma en Offres pour ton UI
     const offers: Offer[] = prices.map(price => ({
       id: price.id,
-      magasin: price.magasin,
+      // CORRECTION ICI : price.magasin n'existe plus, on prend price.store.nom
+      magasin: price.store ? price.store.nom : "Magasin Inconnu",
       prix: price.valeur
     }));
 
