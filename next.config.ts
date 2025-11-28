@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const nextConfig = {
+const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
@@ -17,14 +17,7 @@ const nextConfig = {
       },
     ],
   },
-  eslint: {
-    // On ignore les warnings pendant le build pour passer en prod vite
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    // Idem pour les petites erreurs de type
-    ignoreBuildErrors: true,
-  },
+  // On a supprimé les clés 'eslint' et 'typescript' ici pour satisfaire Next.js 16
 };
 
 export default nextConfig;
