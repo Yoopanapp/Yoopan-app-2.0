@@ -10,19 +10,19 @@ const prisma = new PrismaClient();
 const INPUT_FILE = 'openfoodfacts-products.jsonl.gz';
 const TARGET_PRODUCTS = 2000; // Nombre de produits à importer
 
-// LES MAGASINS (Avec leurs modificateurs de prix pour le réalisme)
-const STORES = [
-  { name: 'Leclerc', priceMod: 1.0 },       // Base
-  { name: 'Intermarché', priceMod: 1.04 },  // +4%
-  { name: 'Carrefour', priceMod: 1.06 },    // +6%
-  { name: 'Auchan', priceMod: 1.07 },       // +7%
-  { name: 'Super U', priceMod: 1.08 },      // +8%
-  { name: 'Monoprix', priceMod: 1.18 },     // +18%
+// LES MAGASINS (Mis à jour avec GPS Vigneux pour que ça marche avec la géolocalisation)
+const STORES_CONFIG = [
+  { name: 'Leclerc Vigneux-sur-Seine', enseigne: 'Leclerc', priceMod: 1.0, lat: 48.7105, lng: 2.4168 },
+  { name: 'Intermarché Super Vigneux', enseigne: 'Intermarché', priceMod: 1.04, lat: 48.7050, lng: 2.4200 },
+  { name: 'Carrefour Market', enseigne: 'Carrefour', priceMod: 1.06, lat: 48.7080, lng: 2.4100 },
+  { name: 'Auchan Vigneux', enseigne: 'Auchan', priceMod: 1.07, lat: 48.7120, lng: 2.4300 },
+  { name: 'Super U Montgeron', enseigne: 'Super U', priceMod: 1.08, lat: 48.7020, lng: 2.4600 },
+  { name: 'Monoprix Juvisy', enseigne: 'Monoprix', priceMod: 1.18, lat: 48.6900, lng: 2.3750 },
 ];
 
 const AWS_BASE_URL = "https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data";
 
-// --- TES FONCTIONS UTILITAIRES (GARDÉES TELLES QUELLES) ---
+// --- TES FONCTIONS UTILITAIRES ---
 
 function getSplitCode(code: string): string | null {
   if (!code || code.length < 8) return null;
@@ -67,15 +67,35 @@ async function extract() {
   console.log(`🚀 Démarrage de l'importation REAL DATA vers PRISMA...`);
   
   if (!fs.existsSync(inputPath)) {
-    console.error(`❌ Fichier introuvable : ${INPUT_FILE}`);
-    process.exit(1);
+    console.warn(`⚠️ Fichier ${INPUT_FILE} introuvable. Le script s'arrête mais le BUILD EST VALIDE.`);
+    return; // On return proprement pour ne pas faire échouer le build Vercel si le fichier n'est pas là
   }
 
   try {
     // 1. Nettoyage de la base existante
     console.log('🧹 Nettoyage de la base de données...');
+    // Attention à l'ordre de suppression à cause des clés étrangères
     await prisma.price.deleteMany();
     await prisma.product.deleteMany();
+    await prisma.store.deleteMany();
+
+    // 2. CRÉATION DES MAGASINS (Étape obligatoire pour avoir des IDs)
+    console.log('📍 Création des magasins...');
+    const dbStores: any[] = [];
+    
+    for (const storeConfig of STORES_CONFIG) {
+        const store = await prisma.store.create({
+            data: {
+                nom: storeConfig.name,
+                enseigne: storeConfig.enseigne,
+                lat: storeConfig.lat,
+                lng: storeConfig.lng,
+                adresse: "Adresse simulée"
+            }
+        });
+        // On attache le modificateur de prix à l'objet store pour l'utiliser plus tard
+        dbStores.push({ ...store, priceMod: storeConfig.priceMod });
+    }
 
     const fileStream = fs.createReadStream(inputPath);
     const gunzip = zlib.createGunzip();
@@ -93,16 +113,16 @@ async function extract() {
       try {
         const p = JSON.parse(line);
 
-        // --- FILTRES (Ta logique) ---
+        // --- FILTRES ---
         if (!p.countries_tags || !p.countries_tags.includes('en:france')) continue;
         const name = p.product_name_fr || p.product_name;
         if (!name) continue;
 
-        const image = getAwsImageUrl(p); // On utilise ta fonction AWS
+        const image = getAwsImageUrl(p);
         if (!image) continue;
         if (!p.code) continue;
 
-        const nutriscore = p.nutrition_grade_fr || 'e'; // Valeur par défaut si manquant
+        const nutriscore = p.nutrition_grade_fr || 'e';
 
         // Nettoyage Catégorie
         let category = 'Épicerie';
@@ -120,7 +140,6 @@ async function extract() {
         const safeName = name.replace(/,/g, ' ').replace(/"/g, '').replace(/;/g, ' ').trim();
 
         // --- INSERTION EN BASE DE DONNÉES ---
-        // On crée le produit ET ses prix en une seule requête (Transaction implicite)
         await prisma.product.create({
           data: {
             ean: p.code,
@@ -128,16 +147,16 @@ async function extract() {
             image: image,
             categorie: category,
             nutriscore: nutriscore,
-            // On crée les prix liés directement
+            // C'EST ICI LA CORRECTION PRINCIPALE :
             prices: {
-              create: STORES.map(store => {
-                // Ta logique de variation de prix
-                const variation = basePrice * 0.05; // Variation légère pour simuler la réalité
+              create: dbStores.map(store => {
+                const variation = basePrice * 0.05;
                 const randomVar = (Math.random() * variation * 2) - variation;
                 const finalPrice = (basePrice * store.priceMod) + randomVar;
                 
                 return {
-                  magasin: store.name,
+                  // On n'utilise PLUS 'magasin' (string) mais 'storeId' (relation)
+                  storeId: store.id, 
                   valeur: parseFloat(finalPrice.toFixed(2))
                 };
               })
@@ -149,7 +168,6 @@ async function extract() {
         if (foundCount >= TARGET_PRODUCTS) break;
 
       } catch (e) { 
-        // Ignorer les lignes JSON malformées
         continue; 
       }
     }
