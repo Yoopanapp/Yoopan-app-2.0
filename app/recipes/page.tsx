@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { Logo } from '@/app/components/logo';
 import Footer from '@/app/components/Footer';
 import MagicCart from '@/app/components/MagicCart';
@@ -6,70 +6,51 @@ import RecipeCard from '@/app/components/RecipeCard';
 import { RECIPES_DATA } from '@/app/data/recipes';
 import Link from 'next/link';
 
-// Fonction helper pour récupérer les produits (ADAPTÉE NOUVELLE BDD)
+// On instancie Prisma directement ici
+const prisma = new PrismaClient();
+
+// Force le rendu dynamique pour éviter le cache Vercel
+export const dynamic = 'force-dynamic';
+
+// Fonction helper adaptée pour la nouvelle base de données
 async function getProductsForMatching() {
   
-  // 1. On récupère les produits AVEC leurs prix (relation)
+  // 1. On récupère les produits AVEC leurs prix (relation prices)
   const products = await prisma.product.findMany({
-    // On sélectionne les champs de base + la relation prices
     select: { 
       ean: true, 
       nom: true, 
       image: true, 
-      // magasin: true, // <--- SUPPRIMÉ CAR N'EXISTE PLUS DANS LA TABLE PRODUCT
       nutriscore: true, 
       categorie: true,
+      // On va chercher les infos dans la table Price liée
       prices: {
-        select: { magasin: true, valeur: true }, // On prend les infos de la table Price
-        orderBy: { valeur: 'asc' } // On trie pour avoir le meilleur prix en premier
+        select: { magasin: true, valeur: true }, 
+        orderBy: { valeur: 'asc' } // Le moins cher en premier
       }
     }
   });
   
-  // 2. Transformation pour retrouver le format "à plat" que ton code attend
-  // On crée une ligne par offre (comme si on avait plusieurs produits identiques avec des prix différents)
-  const flattenedProducts: any[] = [];
-
-  products.forEach((p: any) => {
+  // 2. Transformation pour l'affichage
+  // On convertit le format Prisma (Product -> prices[]) en format UI (Product avec prix + offers[])
+  const formattedProducts = products.map((p: any) => {
       const prices = p.prices || [];
-      
-      // Si le produit a des prix, on crée une entrée pour chaque prix
-      if (prices.length > 0) {
-          prices.forEach((price: any) => {
-              flattenedProducts.push({
-                  ...p,
-                  prix: price.valeur,      // On remet 'prix' à la racine
-                  magasin: price.magasin,  // On remet 'magasin' à la racine
-                  offers: prices.map((o: any) => ({ magasin: o.magasin, prix: o.valeur })) // On garde la liste complète
-              });
-          });
-      } else {
-          // Si pas de prix, on garde le produit quand même (avec prix 0)
-          flattenedProducts.push({
-              ...p,
-              prix: 0,
-              magasin: "Indisponible",
-              offers: []
-          });
-      }
-  });
+      const bestOffer = prices.length > 0 ? prices[0] : { magasin: "Indisponible", valeur: 0 };
 
-  // 3. Regroupement par EAN (Ta logique originale, conservée)
-  const grouped = new Map();
-  flattenedProducts.forEach((p: any) => {
-      const existing = grouped.get(p.ean);
-      // Comme on a déjà aplati, 'p' contient déjà le prix et le magasin d'une offre spécifique
-      // Mais pour ton matching de recette, on veut souvent juste la liste des produits uniques avec leurs offres
-      
-      if (!existing) {
-          grouped.set(p.ean, p);
-      } else {
-          // Si le produit existe déjà, on s'assure juste que la liste des offres est complète
-          // (Note: avec la logique ci-dessus, chaque 'p' a déjà la liste complète 'offers', donc c'est bon)
-      }
+      return {
+          ...p,
+          // On recrée les champs que ton UI attend
+          prix: bestOffer.valeur,
+          magasin: bestOffer.magasin,
+          // On crée la liste des offres
+          offers: prices.map((o: any) => ({ 
+              magasin: o.magasin, 
+              prix: o.valeur 
+          }))
+      };
   });
   
-  return Array.from(grouped.values());
+  return formattedProducts;
 }
 
 export default async function RecipesPage() {
