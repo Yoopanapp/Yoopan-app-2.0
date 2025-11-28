@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// URLs Wikimedia Commons stables pour la démo
+// 1. Tes produits (INCHANGÉS)
 const STARTER_PRODUCTS = [
   { 
     ean: '5449000000996', 
@@ -126,22 +126,88 @@ const STARTER_PRODUCTS = [
   },
 ];
 
-const STORES = [
-  { name: 'Leclerc', priceMod: 1.0 },       
-  { name: 'Intermarché', priceMod: 1.04 },  
-  { name: 'Carrefour', priceMod: 1.06 },    
-  { name: 'Auchan', priceMod: 1.07 },       
-  { name: 'Super U', priceMod: 1.08 },      
-  { name: 'Monoprix', priceMod: 1.18 },     
+// 2. Tes magasins (MIS A JOUR avec GPS Réel autour de Vigneux)
+// J'ai gardé tes 'priceMod' pour conserver ta logique de prix
+const STORES_CONFIG = [
+  { 
+    nom: 'Leclerc Vigneux-sur-Seine', 
+    enseigne: 'Leclerc', 
+    priceMod: 1.0, 
+    adresse: 'Centre Commercial du Lac, 91270 Vigneux-sur-Seine',
+    lat: 48.7105, 
+    lng: 2.4168 
+  },       
+  { 
+    nom: 'Intermarché Super Vigneux', 
+    enseigne: 'Intermarché', 
+    priceMod: 1.04, 
+    adresse: '64 Avenue Henri Barbusse, 91270 Vigneux-sur-Seine',
+    lat: 48.7050, 
+    lng: 2.4200 
+  },  
+  { 
+    nom: 'Carrefour Market', 
+    enseigne: 'Carrefour', 
+    priceMod: 1.06, 
+    adresse: 'Rue du President Kennedy, 91270 Vigneux-sur-Seine',
+    lat: 48.7080, 
+    lng: 2.4100 
+  },    
+  { 
+    nom: 'Auchan Vigneux', 
+    enseigne: 'Auchan', 
+    priceMod: 1.07, 
+    adresse: 'Avenue de la Concorde, 91270 Vigneux-sur-Seine',
+    lat: 48.7120, 
+    lng: 2.4300 
+  },       
+  { 
+    nom: 'Super U Montgeron', 
+    enseigne: 'Super U', 
+    priceMod: 1.08, 
+    adresse: 'ZAC Maurice Garin, 91230 Montgeron',
+    lat: 48.7020, 
+    lng: 2.4600 
+  },      
+  { 
+    nom: 'Monoprix Juvisy', 
+    enseigne: 'Monoprix', 
+    priceMod: 1.18, 
+    adresse: '21 Rue Grande, 91260 Juvisy-sur-Orge',
+    lat: 48.6900, 
+    lng: 2.3750 
+  },     
 ];
 
 async function main() {
-  console.log('🌱 Début du chargement des données (Mode Comparateur)...');
+  console.log('🌱 Début du chargement des données Géolocalisées...');
 
+  // 1. Nettoyage complet
   await prisma.price.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.store.deleteMany();
   console.log('🧹 Base de données nettoyée.');
 
+  // 2. Création des Magasins (Stores) en premier
+  // On stocke les magasins créés dans une liste pour récupérer leurs IDs
+  const createdStores = [];
+
+  for (const storeConfig of STORES_CONFIG) {
+    const store = await prisma.store.create({
+      data: {
+        nom: storeConfig.nom,
+        enseigne: storeConfig.enseigne,
+        adresse: storeConfig.adresse,
+        lat: storeConfig.lat,
+        lng: storeConfig.lng,
+      }
+    });
+    // On garde l'objet complet (avec ID BDD + priceMod) pour la suite
+    createdStores.push({ ...store, priceMod: storeConfig.priceMod });
+  }
+  console.log(`📍 ${createdStores.length} magasins créés.`);
+
+  // 3. Création des Produits et des Prix
   for (const item of STARTER_PRODUCTS) {
     const product = await prisma.product.create({
       data: {
@@ -153,19 +219,21 @@ async function main() {
       },
     });
 
-    for (const store of STORES) {
+    // Pour chaque produit, on crée un prix dans CHAQUE magasin créé
+    for (const store of createdStores) {
       const randomVar = 0.97 + Math.random() * 0.06; 
       const finalPrice = item.basePrice * store.priceMod * randomVar;
       
       await prisma.price.create({
         data: {
-          magasin: store.name,
           valeur: parseFloat(finalPrice.toFixed(2)),
           productId: product.id,
+          storeId: store.id, // C'EST ICI QUE CA CHANGE : On utilise l'ID du magasin
         },
       });
     }
   }
+
   console.log(`✅ ${STARTER_PRODUCTS.length} produits créés avec succès.`);
 }
 

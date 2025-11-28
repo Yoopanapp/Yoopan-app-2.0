@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'; // Assure-toi que ce chemin est bon, sinon remplace par: import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 import SearchBar from './components/SearchBar';
 import { Logo } from './components/logo';
 import Footer from './components/Footer';
@@ -13,7 +13,15 @@ import { Prisma } from '@prisma/client';
 export const dynamic = 'force-dynamic';
 
 // Types pour l'interface utilisateur
-type Offer = { id: number; magasin: string; prix: number; };
+// MISE A JOUR : Ajout de lat et lng optionnels
+type Offer = { 
+  id: number; 
+  magasin: string; 
+  prix: number; 
+  lat?: number; 
+  lng?: number; 
+};
+
 type GroupedProduct = { 
   ean: string; 
   nom: string; 
@@ -25,7 +33,6 @@ type GroupedProduct = {
   worstPrice: number; 
   savings: number; 
   savingsPercent: number; 
-  // Champs de compatibilité pour le ProductCard actuel
   prix?: number;
   magasin?: string;
 };
@@ -55,20 +62,22 @@ export default async function Home(props: { searchParams: Promise<{ q?: string; 
   else if (filter === 'epicerie') whereClause.OR = [{ categorie: { contains: 'Épicerie', mode: 'insensitive' } }, { categorie: { contains: 'Conserves', mode: 'insensitive' } }];
   else if (filter === 'sante') whereClause.nutriscore = { in: ['a', 'b', 'A', 'B'] };
 
-  // 1. Récupération des données avec la relation PRICES
+  // 1. Récupération des données avec la relation PRICES ET STORE
   const rawProducts = await prisma.product.findMany({
     where: whereClause,
     include: {
-        prices: {
-            orderBy: { valeur: 'asc' } // On trie les offres du moins cher au plus cher
-        }
+      prices: {
+        include: {
+          store: true, // On récupère les infos du magasin lié (nom, lat, lng)
+        },
+        orderBy: { valeur: 'asc' }
+      }
     },
     take: 100,
-    orderBy: { id: 'asc' } // Tri par défaut stable
+    orderBy: { id: 'asc' }
   });
 
   // 2. Transformation : Prisma (Nested) -> UI (GroupedProduct)
-  // Plus besoin de la fonction groupProductsByEan car Prisma regroupe déjà par produit
   const groupedProducts: GroupedProduct[] = rawProducts.map(product => {
       const prices = product.prices || [];
       const bestPrice = prices.length > 0 ? prices[0].valeur : 0;
@@ -79,8 +88,11 @@ export default async function Home(props: { searchParams: Promise<{ q?: string; 
       // On transforme les prix Prisma en Offres UI
       const offers: Offer[] = prices.map(p => ({
           id: p.id,
-          magasin: p.magasin,
-          prix: p.valeur
+          magasin: p.store ? p.store.nom : "Magasin Inconnu",
+          prix: p.valeur,
+          // MISE A JOUR : On passe les coordonnées GPS
+          lat: p.store ? p.store.lat : undefined,
+          lng: p.store ? p.store.lng : undefined
       }));
 
       return {
@@ -94,9 +106,8 @@ export default async function Home(props: { searchParams: Promise<{ q?: string; 
           worstPrice: worstPrice,
           savings: savings,
           savingsPercent: savingsPercent,
-          // Rétrocompatibilité pour l'affichage direct dans la carte
           prix: bestPrice, 
-          magasin: prices.length > 0 ? prices[0].magasin : 'Indisponible'
+          magasin: prices.length > 0 && prices[0].store ? prices[0].store.nom : 'Indisponible'
       };
   });
 
@@ -150,7 +161,7 @@ export default async function Home(props: { searchParams: Promise<{ q?: string; 
       {!query && (
         <div className="py-12 px-6 border-t border-slate-100 dark:border-slate-800">
           <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Feature icon="⚡" title="Temps Réel" desc="Les prix sont mis à jour quotidiennement." />
+            <Feature icon="📍" title="Géolocalisé" desc="Prix des magasins réellement autour de vous (Vigneux)." />
             <Feature icon="🛡️" title="100% Indépendant" desc="Transparence totale, aucune affiliation cachée." />
             <Feature icon="💰" title="Économies Réelles" desc="Nos utilisateurs économisent jusqu'à 20%." />
           </div>
@@ -163,7 +174,7 @@ export default async function Home(props: { searchParams: Promise<{ q?: string; 
              <h2 className="text-2xl font-bold text-slate-800 dark:text-white">
                {query ? `Résultats pour "${query}"` : filter !== 'all' ? `Rayon : ${filter}` : 'Les immanquables'}
              </h2>
-             <p className="text-slate-500 text-sm mt-1">{groupedProducts.length} produits trouvés.</p>
+             <p className="text-slate-500 text-sm mt-1">{groupedProducts.length} produits trouvés à proximité.</p>
            </div>
         </div>
 
@@ -179,7 +190,7 @@ export default async function Home(props: { searchParams: Promise<{ q?: string; 
           {groupedProducts.map((product) => (
             <ProductCard 
                 key={product.ean} 
-                // as any est utilisé ici pour éviter les conflits mineurs de typage stricts temporaires
+                // as any pour éviter les conflits mineurs temporaires
                 product={product as any} 
             />
           ))}

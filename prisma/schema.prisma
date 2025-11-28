@@ -9,31 +9,54 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. La fiche d'identité du produit (Invariable)
+// 1. La fiche d'identité du produit (Inchangé)
 model Product {
   id          Int      @id @default(autoincrement())
-  ean         String   @unique // Le code-barres est la clé unique
+  ean         String   @unique
   nom         String
   image       String?
   categorie   String?
   marque      String?
-  nutriscore  String?  // "a", "b", "c", "d", "e"
+  nutriscore  String?
   
-  // Relation : Un produit a plusieurs prix
   prices      Price[]
   
   createdAt   DateTime @default(now())
 }
 
-// 2. Le relevé de prix (Variable)
+// 2. NOUVEAU : Le Magasin Physique (avec GPS)
+model Store {
+  id        Int      @id @default(autoincrement())
+  nom       String   // ex: "Leclerc Vigneux-sur-Seine"
+  enseigne  String   // ex: "Leclerc" (pour le logo/filtrage)
+  adresse   String?
+  lat       Float    // Latitude
+  lng       Float    // Longitude
+  
+  prices    Price[]  // Un magasin a plusieurs prix enregistrés
+  
+  createdAt DateTime @default(now())
+
+  // Index pour accélérer les futurs calculs de distance
+  @@index([lat, lng])
+}
+
+// 3. Le relevé de prix (Mise à jour : Relation vers Store)
 model Price {
   id        Int      @id @default(autoincrement())
-  magasin   String   // ex: "Leclerc", "Carrefour City"
-  valeur    Float    // ex: 2.45
+  valeur    Float
   
-  // Relation inverse
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Relation Produit (Inchangé)
   productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Relation Magasin (REMPLACE l'ancien champ String 'magasin')
+  storeId   Int
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   updatedAt DateTime @updatedAt
+  
+  // Index pour récupérer vite les prix d'un magasin ou d'un produit
+  @@index([productId])
+  @@index([storeId])
 }

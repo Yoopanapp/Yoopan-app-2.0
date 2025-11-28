@@ -3,8 +3,10 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { UserProvider } from './context/UserContext';
 import { CartProvider } from './context/CartContext';
-import { FlyToCartProvider } from './context/FlyToCartContext'; // <--- IMPORT 1
-import FlyingOverlay from './components/FlyingOverlay';         // <--- IMPORT 2
+import { FlyToCartProvider } from './context/FlyToCartContext';
+import FlyingOverlay from './components/FlyingOverlay';
+// 1. IMPORT DU NOUVEAU PROVIDER GPS
+import { UserLocationProvider } from './context/UserLocationContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -23,6 +25,8 @@ export default function RootLayout({
       <body className={inter.className}>
         {/* On enveloppe tout avec le FlyToCartProvider */}
         <FlyToCartProvider>
+          {/* 2. ON AJOUTE LE GPS ICI POUR QU'IL SOIT DISPO PARTOUT */}
+          <UserLocationProvider>
             <UserProvider>
               <CartProvider>
                 
@@ -33,6 +37,7 @@ export default function RootLayout({
                 
               </CartProvider>
             </UserProvider>
+          </UserLocationProvider>
         </FlyToCartProvider>
       </body>
     </html>
