@@ -1,0 +1,39 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. La fiche d'identité du produit (Invariable)
+model Product {
+  id          Int      @id @default(autoincrement())
+  ean         String   @unique // Le code-barres est la clé unique
+  nom         String
+  image       String?
+  categorie   String?
+  marque      String?
+  nutriscore  String?  // "a", "b", "c", "d", "e"
+  
+  // Relation : Un produit a plusieurs prix
+  prices      Price[]
+  
+  createdAt   DateTime @default(now())
+}
+
+// 2. Le relevé de prix (Variable)
+model Price {
+  id        Int      @id @default(autoincrement())
+  magasin   String   // ex: "Leclerc", "Carrefour City"
+  valeur    Float    // ex: 2.45
+  
+  // Relation inverse
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId Int
+
+  updatedAt DateTime @updatedAt
+}
