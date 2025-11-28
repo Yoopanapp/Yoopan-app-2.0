@@ -1,31 +1,58 @@
-// app/favorites/page.tsx
 import { prisma } from '@/lib/prisma';
-import { Logo } from '@/app/components/logo'; // Attention majuscule
+import { Logo } from '@/app/components/logo';
 import Footer from '@/app/components/Footer';
 import FavoritesGrid from '@/app/components/FavoritesGrid';
 import MagicCart from '@/app/components/MagicCart';
 import Link from 'next/link';
 
-// Fonction pour regrouper les produits (même logique que l'accueil)
-// (Idéalement on devrait mettre ça dans un fichier utils/helpers.ts pour éviter la duplication, mais on fait simple)
+// On garde tes types pour l'UI
 type Offer = { id: number; magasin: string; prix: number; };
 type GroupedProduct = { ean: string; nom: string; image: string | null; categorie: string | null; nutriscore: string | null; offers: Offer[]; bestPrice: number; worstPrice: number; savings: number; savingsPercent: number; };
 
-function groupProductsByEan(products: any[]): GroupedProduct[] {
-  const map = new Map<string, GroupedProduct>();
-  products.forEach((p) => {
-    const existing = map.get(p.ean);
-    const offer: Offer = { id: p.id, magasin: p.magasin, prix: p.prix };
-    if (existing) { existing.offers.push(offer); if (p.prix < existing.bestPrice) existing.bestPrice = p.prix; if (p.prix > existing.worstPrice) existing.worstPrice = p.prix; } 
-    else { map.set(p.ean, { ean: p.ean, nom: p.nom, image: p.image, categorie: p.categorie, nutriscore: p.nutriscore, offers: [offer], bestPrice: p.prix, worstPrice: p.prix, savings: 0, savingsPercent: 0 }); }
-  });
-  return Array.from(map.values()).map(product => { product.offers.sort((a, b) => a.prix - b.prix); product.savings = product.worstPrice - product.bestPrice; product.savingsPercent = product.worstPrice > 0 ? Math.round((product.savings / product.worstPrice) * 100) : 0; return product; });
-}
-
 export default async function FavoritesPage() {
-  // On récupère tout (pour l'instant c'est ok car local, en prod on ferait une requête filtrée)
-  const rawProducts = await prisma.product.findMany();
-  const groupedProducts = groupProductsByEan(rawProducts);
+  
+  // 1. On récupère les produits AVEC leurs prix triés
+  const rawProducts = await prisma.product.findMany({
+    include: {
+      prices: {
+        orderBy: { valeur: 'asc' }
+      }
+    }
+  });
+
+  // 2. Transformation des données (Mapping)
+  // Prisma nous renvoie un format imbriqué (produit -> prices), 
+  // mais tes composants UI attendent un format "GroupedProduct" spécifique.
+  const groupedProducts: GroupedProduct[] = rawProducts.map((p) => {
+    // On extrait les infos de prix depuis la relation 'prices'
+    const prices = p.prices || [];
+    
+    // Calcul des statistiques de prix (meilleur, pire, économie)
+    const bestPrice = prices.length > 0 ? prices[0].valeur : 0;
+    const worstPrice = prices.length > 0 ? prices[prices.length - 1].valeur : 0;
+    const savings = worstPrice - bestPrice;
+    const savingsPercent = worstPrice > 0 ? Math.round((savings / worstPrice) * 100) : 0;
+
+    // On transforme les prix Prisma en Offres pour ton UI
+    const offers: Offer[] = prices.map(price => ({
+      id: price.id,
+      magasin: price.magasin,
+      prix: price.valeur
+    }));
+
+    return {
+      ean: p.ean,
+      nom: p.nom,
+      image: p.image,
+      categorie: p.categorie,
+      nutriscore: p.nutriscore || 'E',
+      offers: offers,
+      bestPrice: bestPrice,
+      worstPrice: worstPrice,
+      savings: savings,
+      savingsPercent: savingsPercent
+    };
+  });
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] dark:bg-slate-900 text-slate-900 dark:text-white font-sans relative flex flex-col transition-colors duration-300">
@@ -39,6 +66,7 @@ export default async function FavoritesPage() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 flex-grow w-full">
+        {/* On passe les produits transformés à la grille des favoris */}
         <FavoritesGrid allProducts={groupedProducts} />
       </div>
 
