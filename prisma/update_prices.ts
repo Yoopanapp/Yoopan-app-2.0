@@ -1,4 +1,3 @@
-// prisma/update_prices.ts
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -9,10 +8,9 @@ const OPEN_PRICES_API = 'https://prices.openfoodfacts.org/api/v1/prices';
 async function updatePrices() {
   console.log('🕵️‍♂️ Démarrage de la recherche de VRAIS PRIX...');
   
-  // 1. On récupère tous nos produits (groupés par EAN pour ne pas requêter 3 fois le même)
+  // 1. On récupère tous nos produits (on a juste besoin de l'EAN et de l'ID)
   const products = await prisma.product.findMany({
-    distinct: ['ean'],
-    select: { ean: true, nom: true }
+    select: { id: true, ean: true, nom: true }
   });
 
   console.log(`📦 ${products.length} produits à vérifier.`);
@@ -43,24 +41,38 @@ async function updatePrices() {
           else if (sourceStore.includes('monoprix')) targetStore = 'Monoprix';
 
           if (targetStore && item.price) {
-            // 3. MISE À JOUR DANS NOTRE BASE
-            // On cherche si on a ce produit pour ce magasin dans notre base
-            const existingProduct = await prisma.product.findFirst({
-              where: { ean: product.ean, magasin: targetStore }
+            // 3. MISE À JOUR DANS LA TABLE "PRICE"
+            
+            // On cherche si un prix existe déjà pour ce produit ET ce magasin
+            const existingPrice = await prisma.price.findFirst({
+              where: { 
+                productId: product.id,
+                magasin: targetStore 
+              }
             });
 
-            if (existingProduct) {
-              await prisma.product.update({
-                where: { id: existingProduct.id },
-                data: { prix: item.price } // ON REMPLACE PAR LE VRAI PRIX
+            if (existingPrice) {
+              // MISE À JOUR : Le prix existe, on change la valeur
+              await prisma.price.update({
+                where: { id: existingPrice.id },
+                data: { valeur: item.price }
               });
               console.log(`   -> Mise à jour ${targetStore} : ${item.price}€`);
-              updatedCount++;
+            } else {
+              // CRÉATION : Le prix n'existe pas, on l'ajoute
+              await prisma.price.create({
+                data: {
+                  magasin: targetStore,
+                  valeur: item.price,
+                  productId: product.id
+                }
+              });
+              console.log(`   -> Nouveau prix ${targetStore} : ${item.price}€`);
             }
+            updatedCount++;
           }
         }
       } else {
-        // Pas de prix trouvé, on passe silencieusement (ou on met un petit point pour montrer que ça avance)
         process.stdout.write('.'); 
       }
 
