@@ -1,9 +1,15 @@
-import { prisma } from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { Logo } from '@/app/components/logo';
 import Footer from '@/app/components/Footer';
 import FavoritesGrid from '@/app/components/FavoritesGrid';
 import MagicCart from '@/app/components/MagicCart';
 import Link from 'next/link';
+
+// On instancie Prisma directement pour éviter les problèmes de build Vercel
+const prisma = new PrismaClient();
+
+// Force le rendu dynamique pour éviter la mise en cache statique qui plante
+export const dynamic = 'force-dynamic';
 
 // On garde tes types pour l'UI
 type Offer = { id: number; magasin: string; prix: number; };
