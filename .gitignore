@@ -24,3 +24,5 @@ build/
 dist/
 .DS_Store
 __pycache__/
+# ... tes autres lignes ...
+donnees_leclerc_light/
