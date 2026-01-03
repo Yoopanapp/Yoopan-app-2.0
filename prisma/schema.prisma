@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,54 +7,124 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. La fiche d'identité du produit (Inchangé)
+// --- PARTIE MÉTIER (SCRAPING & DONNÉES) ---
+
+model Store {
+  id            String    @id // ex: 079111
+  nom           String    
+  enseigne      String
+  noPL          String    @unique
+  noPR          String
+  ville         String?
+  cp            String?
+  lat           Float?
+  lng           Float?
+  lastScrapedAt DateTime?
+  prices        Price[]
+}
+
+model Category {
+  id       String    @id
+  nom      String    
+  products Product[]
+}
+
 model Product {
-  id          Int      @id @default(autoincrement())
-  ean         String   @unique
+  id          String    @id // ex: 3017620421006
   nom         String
   image       String?
-  categorie   String?
-  marque      String?
-  nutriscore  String?
-  
+  rating      Float?    
+  categoryId  String?   
+  category    Category? @relation(fields: [categoryId], references: [id])
   prices      Price[]
-  
-  createdAt   DateTime @default(now())
+  favoritedBy Favorite[] 
 }
 
-// 2. NOUVEAU : Le Magasin Physique (avec GPS)
-model Store {
-  id        Int      @id @default(autoincrement())
-  nom       String   // ex: "Leclerc Vigneux-sur-Seine"
-  enseigne  String   // ex: "Leclerc" (pour le logo/filtrage)
-  adresse   String?
-  lat       Float    // Latitude
-  lng       Float    // Longitude
-  
-  prices    Price[]  // Un magasin a plusieurs prix enregistrés
-  
-  createdAt DateTime @default(now())
-
-  // Index pour accélérer les futurs calculs de distance
-  @@index([lat, lng])
-}
-
-// 3. Le relevé de prix (Mise à jour : Relation vers Store)
 model Price {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(cuid())
   valeur    Float
-  
-  // Relation Produit (Inchangé)
-  productId Int
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  // Relation Magasin (REMPLACE l'ancien champ String 'magasin')
-  storeId   Int
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-
+  promo     Float?
+  unitPrice String?
   updatedAt DateTime @updatedAt
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  storeId   String
+  store     Store   @relation(fields: [storeId], references: [id])
+
+  @@unique([productId, storeId])
+}
+
+// --- PARTIE AUTHENTIFICATION & UTILISATEUR ---
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
   
-  // Index pour récupérer vite les prix d'un magasin ou d'un produit
-  @@index([productId])
-  @@index([storeId])
+  // Champs d'authentification et préférences
+  password      String?   
+  preferredStoreId String?
+  
+  // NOUVEAUX CHAMPS STATS (Pour éviter le faux texte)
+  xp            Int       @default(0)
+  scans         Int       @default(0)
+  totalSaved    Float     @default(0.0)
+  
+  // Relations NextAuth
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Relations Métier
+  favorites     Favorite[]
+  createdAt     DateTime  @default(now())
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Favorite {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productEan  String
+  product     Product  @relation(fields: [productEan], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, productEan])
 }

@@ -5,7 +5,6 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* CETTE LIGNE EST CRUCIALE : Elle active le mode sombre manuel */
 @variant dark (&:where(.dark, .dark *));
 
 :root {
@@ -13,14 +12,30 @@
   --foreground: #171717;
 }
 
-/* Configuration des couleurs par défaut */
+/* FOND D'ÉCRAN GLOBAL (Mesh Gradient subtil) */
 body {
   color: var(--foreground);
-  background: var(--background);
+  background-color: var(--background);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  
+  /* Ajout d'une texture de fond légère pour donner de la profondeur */
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(210, 100%, 96%, 1) 0, transparent 50%), 
+    radial-gradient(at 50% 0%, hsla(220, 100%, 98%, 1) 0, transparent 50%), 
+    radial-gradient(at 100% 0%, hsla(200, 100%, 96%, 1) 0, transparent 50%);
+  background-attachment: fixed;
 }
 
-/* Animations personnalisées (pour le panier, etc.) */
+/* Mode sombre adapté */
+.dark body {
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(220, 40%, 10%, 1) 0, transparent 50%), 
+    radial-gradient(at 50% 0%, hsla(222, 40%, 15%, 1) 0, transparent 50%), 
+    radial-gradient(at 100% 0%, hsla(220, 40%, 10%, 1) 0, transparent 50%);
+}
+
+/* --- ANIMATIONS --- */
+
 @keyframes slide-up {
   from { transform: translateY(100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
@@ -35,4 +50,24 @@ body {
 }
 .animate-fade-in {
   animation: fade-in 0.5s ease-out forwards;
+}
+
+/* Animation du texte dégradé (Le titre qui change de couleur) */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animate-gradient {
+  background-size: 300%;
+  animation: gradient 8s ease infinite;
+}
+
+/* Animation d'apparition vers le haut (pour le badge et les textes) */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
 }

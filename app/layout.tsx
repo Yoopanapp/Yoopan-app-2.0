@@ -1,12 +1,17 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+
+// --- TES IMPORTS EXISTANTS ---
 import { UserProvider } from './context/UserContext';
 import { CartProvider } from './context/CartContext';
 import { FlyToCartProvider } from './context/FlyToCartContext';
 import FlyingOverlay from './components/FlyingOverlay';
-// 1. IMPORT DU NOUVEAU PROVIDER GPS
 import { UserLocationProvider } from './context/UserLocationContext';
+import StorePersistence from './components/StorePersistence';
+
+// --- NOUVEL IMPORT AUTH ---
+import { SessionWrapper } from './components/SessionWrapper'; 
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -23,22 +28,27 @@ export default function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* On enveloppe tout avec le FlyToCartProvider */}
-        <FlyToCartProvider>
-          {/* 2. ON AJOUTE LE GPS ICI POUR QU'IL SOIT DISPO PARTOUT */}
-          <UserLocationProvider>
-            <UserProvider>
-              <CartProvider>
-                
-                {children}
+        {/* On enveloppe TOUT avec la Session pour que l'auth marche partout */}
+        <SessionWrapper>
+            
+            <FlyToCartProvider>
+              <UserLocationProvider>
+                <UserProvider>
+                  <CartProvider>
+                    
+                    {/* Le gardien de l'URL */}
+                    <StorePersistence />
 
-                {/* L'overlay doit être ici, après children, pour être par-dessus tout */}
-                <FlyingOverlay />
-                
-              </CartProvider>
-            </UserProvider>
-          </UserLocationProvider>
-        </FlyToCartProvider>
+                    {children}
+
+                    <FlyingOverlay />
+                    
+                  </CartProvider>
+                </UserProvider>
+              </UserLocationProvider>
+            </FlyToCartProvider>
+
+        </SessionWrapper>
       </body>
     </html>
   );

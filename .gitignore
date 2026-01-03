@@ -1,5 +1,26 @@
-node_modules
-.next
+# --- SÉCURITÉ (CRUCIAL) ---
 .env
-openfoodfacts-products.jsonl.gz
-.vercel
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- FICHIERS LOURDS & SCRAPING (Vus sur ton image) ---
+IMPORT_SUPABASE.csv
+produit leclerc.txt
+id et nom magasin leclerc.txt
+*.csv
+*.txt
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!data/*.json  # Garde les petits JSONs de config si tu en as dans data/
+
+# --- DOSSIERS SYSTÈME & DÉPENDANCES ---
+node_modules/
+.next/
+build/
+dist/
+.DS_Store
+__pycache__/
