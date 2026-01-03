@@ -11,6 +11,7 @@ produit leclerc.txt
 id et nom magasin leclerc.txt
 *.csv
 *.txt
+*.json
 !package.json
 !package-lock.json
 !tsconfig.json
