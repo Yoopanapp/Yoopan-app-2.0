@@ -13,6 +13,9 @@ import StorePersistence from './components/StorePersistence';
 // --- NOUVEL IMPORT AUTH ---
 import { SessionWrapper } from './components/SessionWrapper'; 
 
+// 👇 1. AJOUTE L'IMPORT ICI 👇
+import MobileMenu from './components/MobileMenu'; 
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -28,7 +31,6 @@ export default function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* On enveloppe TOUT avec la Session pour que l'auth marche partout */}
         <SessionWrapper>
             
             <FlyToCartProvider>
@@ -42,6 +44,10 @@ export default function RootLayout({
                     {children}
 
                     <FlyingOverlay />
+
+                    {/* 👇 2. AJOUTE LE COMPOSANT ICI 👇 */}
+                    {/* Il doit être DANS le CartProvider pour lire le nombre d'articles */}
+                    <MobileMenu /> 
                     
                   </CartProvider>
                 </UserProvider>
